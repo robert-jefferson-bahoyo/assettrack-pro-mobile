@@ -4,6 +4,9 @@ import '../services/api_service.dart';
 import 'login_screen.dart';
 import 'manual_lookup_screen.dart';
 import 'qr_scanner_screen.dart';
+import 'asset_detail_screen.dart';
+import 'recent_activity_screen.dart';
+import 'assets_by_status_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -78,14 +81,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
+      (route) => false,
     );
   }
 
   Future<void> _openScanner() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const QrScannerScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const QrScannerScreen()));
 
     if (mounted) {
       _loadSummary();
@@ -93,9 +96,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openSearch() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ManualLookupScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ManualLookupScreen()));
 
     if (mounted) {
       _loadSummary();
@@ -248,31 +251,37 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: 'Total Assets',
                     count: _count('total_assets'),
                     icon: Icons.inventory_2_outlined,
+                    status: 'all',
                   ),
                   _summaryCard(
                     title: 'Assigned',
                     count: _count('assigned'),
                     icon: Icons.person_outline,
+                    status: 'assigned',
                   ),
                   _summaryCard(
                     title: 'Available',
                     count: _count('available'),
                     icon: Icons.check_circle_outline,
+                    status: 'available',
                   ),
                   _summaryCard(
                     title: 'Maintenance',
                     count: _count('maintenance'),
                     icon: Icons.build_outlined,
+                    status: 'maintenance',
                   ),
                   _summaryCard(
                     title: 'Disposed',
                     count: _count('disposed'),
                     icon: Icons.delete_outline,
+                    status: 'disposed',
                   ),
                   _summaryCard(
                     title: 'Lost',
                     count: _count('lost'),
                     icon: Icons.warning_amber_outlined,
+                    status: 'lost',
                   ),
                 ],
               ),
@@ -286,6 +295,51 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _openMovementAsset(dynamic item) async {
+    final code = item['qr_code']?.toString().trim().isNotEmpty == true
+        ? item['qr_code'].toString()
+        : item['asset_no']?.toString() ?? '';
+
+    if (code.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Asset code is missing.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final asset = await ApiService.scanAsset(code);
+
+      if (!mounted) return;
+
+      final returned = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => AssetDetailScreen(asset: asset)),
+      );
+
+      if (returned == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Asset returned successfully.')),
+        );
+      }
+
+      if (mounted) {
+        _loadSummary();
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _recentActivitySection() {
@@ -308,50 +362,80 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Recent Activity',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Recent Activity',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const RecentActivityScreen(),
+                      ),
+                    );
+
+                    if (mounted) {
+                      _loadSummary();
+                    }
+                  },
+                  child: const Text('View All'),
+                ),
+              ],
             ),
             const Divider(height: 22),
 
             ..._recentMovements.map((item) {
               return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const CircleAvatar(
-                      radius: 18,
-                      child: Icon(Icons.history, size: 20),
+                padding: const EdgeInsets.only(bottom: 8),
+                child: InkWell(
+                  onTap: () => _openMovementAsset(item),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const CircleAvatar(
+                          radius: 18,
+                          child: Icon(Icons.history, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${_movementText(item['movement_type'])} - ${_text(item['asset_name'])}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Asset No: ${_text(item['asset_no'])}',
+                                style: const TextStyle(
+                                  color: Colors.black54,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Text(
+                                _text(item['movement_date']),
+                                style: const TextStyle(
+                                  color: Colors.black45,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right, color: Colors.black38),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${_movementText(item['movement_type'])} - ${_text(item['asset_name'])}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'Asset No: ${_text(item['asset_no'])}',
-                            style: const TextStyle(
-                              color: Colors.black54,
-                              fontSize: 13,
-                            ),
-                          ),
-                          Text(
-                            _text(item['movement_date']),
-                            style: const TextStyle(
-                              color: Colors.black45,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               );
             }),
@@ -384,43 +468,58 @@ class _HomeScreenState extends State<HomeScreen> {
     required String title,
     required String count,
     required IconData icon,
+    required String status,
   }) {
     const Color primaryColor = Color(0xFF0D6EFD);
 
-    return Card(
-      elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: primaryColor.withOpacity(0.10),
-              child: Icon(icon, color: primaryColor),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    count,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 22,
-                    ),
-                  ),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.black54,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
+    return InkWell(
+      onTap: () async {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AssetsByStatusScreen(title: title, status: status),
+          ),
+        );
+
+        if (mounted) {
+          _loadSummary();
+        }
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Card(
+        elevation: 1,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: primaryColor.withOpacity(0.10),
+                child: Icon(icon, color: primaryColor),
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      count,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22,
+                      ),
+                    ),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.black54,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

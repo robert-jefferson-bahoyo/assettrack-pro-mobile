@@ -74,7 +74,7 @@ class _ManualLookupScreenState extends State<ManualLookupScreen> {
         _isLoadingOptions = false;
       });
 
-      _showError(e.toString().replaceFirst('Exception: ', ''));
+      _showError(ApiService.friendlyError(e));
     }
   }
 
@@ -283,7 +283,7 @@ class _ManualLookupScreenState extends State<ManualLookupScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      _showError(e.toString().replaceFirst('Exception: ', ''));
+      _showError(ApiService.friendlyError(e));
     } finally {
       if (mounted) {
         setState(() {
@@ -325,7 +325,7 @@ class _ManualLookupScreenState extends State<ManualLookupScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      _showError(e.toString().replaceFirst('Exception: ', ''));
+      _showError(ApiService.friendlyError(e));
     } finally {
       if (mounted) {
         setState(() {
@@ -353,6 +353,47 @@ class _ManualLookupScreenState extends State<ManualLookupScreen> {
 
     final text = value.toString().trim();
     return text.isEmpty ? '-' : text;
+  }
+
+  String _employeeDisplay(dynamic item) {
+    final employee = _value(item, 'assigned_employee');
+    final status = _value(item, 'current_status').toLowerCase();
+
+    if (employee != '-') {
+      return employee;
+    }
+
+    if (status == 'assigned') {
+      return 'No employee assigned';
+    }
+
+    return '-';
+  }
+
+  String _displayStatus(dynamic item) {
+    final status = _value(item, 'current_status').toLowerCase();
+    final employee = _value(item, 'assigned_employee');
+
+    if (status == 'assigned' && employee == '-') {
+      return 'Assigned to Office';
+    }
+
+    if (status == 'assigned' && employee != '-') {
+      return 'Assigned to Employee';
+    }
+
+    switch (status) {
+      case 'available':
+        return 'Available';
+      case 'maintenance':
+        return 'Maintenance';
+      case 'disposed':
+        return 'Disposed';
+      case 'lost':
+        return 'Lost';
+      default:
+        return _value(item, 'current_status');
+    }
   }
 
   Color _statusColor(String status) {
@@ -530,7 +571,8 @@ class _ManualLookupScreenState extends State<ManualLookupScreen> {
           const SizedBox(height: 10),
 
           ..._results.map((item) {
-            final status = _value(item, 'current_status');
+            final rawStatus = _value(item, 'current_status');
+            final displayStatus = _displayStatus(item);
 
             return Card(
               elevation: 1,
@@ -551,9 +593,7 @@ class _ManualLookupScreenState extends State<ManualLookupScreen> {
                     children: [
                       Text('Asset No: ${_value(item, 'asset_no')}'),
                       Text('Property No: ${_value(item, 'property_no')}'),
-                      Text(
-                        'Employee: ${_value(item, 'assigned_employee')}',
-                      ),
+                      Text('Employee: ${_employeeDisplay(item)}'),
                       Text('Office: ${_value(item, 'current_office')}'),
                       Text(
                         'Department: ${_value(item, 'current_department')}',
@@ -567,13 +607,13 @@ class _ManualLookupScreenState extends State<ManualLookupScreen> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: _statusColor(status).withOpacity(0.12),
+                    color: _statusColor(rawStatus).withOpacity(0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    status.toUpperCase(),
+                    displayStatus.toUpperCase(),
                     style: TextStyle(
-                      color: _statusColor(status),
+                      color: _statusColor(rawStatus),
                       fontWeight: FontWeight.bold,
                       fontSize: 11,
                     ),

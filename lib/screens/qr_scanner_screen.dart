@@ -62,7 +62,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text(ApiService.friendlyError(e)),
           backgroundColor: Colors.red,
         ),
       );

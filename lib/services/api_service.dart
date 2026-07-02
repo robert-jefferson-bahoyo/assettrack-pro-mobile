@@ -10,6 +10,52 @@ class ApiService {
   static const String _userNameKey = 'user_name';
   static const String _userEmailKey = 'user_email';
 
+  static Future<List<dynamic>> getAssetsByStatus(String status) async {
+    final token = await getToken();
+
+    if (token == null || token.isEmpty) {
+      throw Exception('You are not logged in.');
+    }
+
+    final uri = Uri.parse(
+      '$baseUrl/assets/by-status',
+    ).replace(queryParameters: {'status': status});
+
+    final response = await http.get(
+      uri,
+      headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'},
+    );
+
+    final Map<String, dynamic> data = jsonDecode(response.body);
+
+    if (response.statusCode == 200 && data['success'] == true) {
+      return data['assets'] as List<dynamic>;
+    }
+
+    throw Exception(data['message'] ?? 'Failed to load assets.');
+  }
+
+  static Future<List<dynamic>> getRecentActivity() async {
+    final token = await getToken();
+
+    if (token == null || token.isEmpty) {
+      throw Exception('You are not logged in.');
+    }
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/dashboard/recent-activity'),
+      headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'},
+    );
+
+    final Map<String, dynamic> data = jsonDecode(response.body);
+
+    if (response.statusCode == 200 && data['success'] == true) {
+      return data['recent_movements'] as List<dynamic>;
+    }
+
+    throw Exception(data['message'] ?? 'Failed to load recent activity.');
+  }
+
   static Future<Map<String, dynamic>> getDashboardSummary() async {
     final token = await getToken();
 
@@ -19,10 +65,7 @@ class ApiService {
 
     final response = await http.get(
       Uri.parse('$baseUrl/dashboard/summary'),
-      headers: {
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
+      headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'},
     );
 
     final Map<String, dynamic> data = jsonDecode(response.body);
@@ -230,5 +273,27 @@ class ApiService {
     await prefs.remove(_tokenKey);
     await prefs.remove(_userNameKey);
     await prefs.remove(_userEmailKey);
+  }
+
+  static String friendlyError(Object e) {
+    final message = e.toString().replaceFirst('Exception: ', '');
+
+    if (message.contains('SocketException') ||
+        message.contains('Connection refused') ||
+        message.contains('Failed host lookup') ||
+        message.contains('Network is unreachable') ||
+        message.contains('Connection timed out')) {
+      return 'Cannot connect to the server. Please check Wi-Fi, server IP, and Laravel server.';
+    }
+
+    if (message.contains('Connection closed before full header was received')) {
+      return 'Server connection was interrupted. Please try again.';
+    }
+
+    if (message.contains('FormatException')) {
+      return 'Invalid server response. Please check if the Laravel API is running correctly.';
+    }
+
+    return message;
   }
 }
