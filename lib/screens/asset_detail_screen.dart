@@ -48,20 +48,48 @@ class AssetDetailScreen extends StatelessWidget {
     }
 
     final int assetId = int.parse(rawId.toString());
+    String remarksInput = '';
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) {
+      barrierDismissible: false,
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Return Asset'),
-          content: const Text('Are you sure you want to return this asset?'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Are you sure you want to return this asset?'),
+                const SizedBox(height: 14),
+                TextField(
+                  maxLines: 3,
+                  textInputAction: TextInputAction.done,
+                  onChanged: (value) {
+                    remarksInput = value;
+                  },
+                  decoration: const InputDecoration(
+                    labelText: 'Remarks',
+                    hintText: 'Optional remarks',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () {
+                FocusScope.of(dialogContext).unfocus();
+                Navigator.of(dialogContext).pop(false);
+              },
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
+              onPressed: () {
+                FocusScope.of(dialogContext).unfocus();
+                Navigator.of(dialogContext).pop(true);
+              },
               child: const Text('Return'),
             ),
           ],
@@ -73,35 +101,50 @@ class AssetDetailScreen extends StatelessWidget {
       return;
     }
 
+    final remarks = remarksInput.trim().isEmpty
+        ? 'Asset returned using mobile scanner.'
+        : remarksInput.trim();
+
     if (!context.mounted) return;
 
-    showDialog(
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    await Future.delayed(const Duration(milliseconds: 250));
+
+    if (!context.mounted) return;
+
+    showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) {
-        return const Center(child: CircularProgressIndicator());
+        return const AlertDialog(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 16),
+              Expanded(child: Text('Returning asset...')),
+            ],
+          ),
+        );
       },
     );
 
     try {
-      await ApiService.returnAsset(
-        assetId: assetId,
-        remarks: 'Asset returned using mobile scanner.',
-      );
+      await ApiService.returnAsset(assetId: assetId, remarks: remarks);
 
       if (!context.mounted) return;
 
-      Navigator.of(context).pop();
+      Navigator.of(context, rootNavigator: true).pop();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Asset returned successfully.')),
-      );
-
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } catch (e) {
       if (!context.mounted) return;
 
-      Navigator.of(context).pop();
+      Navigator.of(context, rootNavigator: true).pop();
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -149,8 +192,7 @@ class AssetDetailScreen extends StatelessWidget {
                   ),
                 ),
 
-              if (canReturn)
-                const SizedBox(height: 10),
+              if (canReturn) const SizedBox(height: 10),
 
               Row(
                 children: [
@@ -167,7 +209,9 @@ class AssetDetailScreen extends StatelessWidget {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        Navigator.of(context).popUntil((route) => route.isFirst);
+                        Navigator.of(
+                          context,
+                        ).popUntil((route) => route.isFirst);
                       },
                       icon: const Icon(Icons.home_outlined),
                       label: const Text('Back to Home'),

@@ -32,11 +32,15 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
       if (!mounted) return;
 
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => AssetDetailScreen(asset: asset),
-        ),
+      final returned = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => AssetDetailScreen(asset: asset)),
       );
+
+      if (returned == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Asset returned successfully.')),
+        );
+      }
 
       if (!mounted) return;
 
@@ -107,10 +111,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
               width: 260,
               height: 260,
               decoration: BoxDecoration(
-                border: Border.all(
-                  color: Colors.white,
-                  width: 3,
-                ),
+                border: Border.all(color: Colors.white, width: 3),
                 borderRadius: BorderRadius.circular(18),
               ),
             ),
@@ -131,10 +132,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                     ? 'Checking asset...'
                     : 'Place the asset QR code inside the box.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                ),
+                style: const TextStyle(color: Colors.white, fontSize: 15),
               ),
             ),
           ),

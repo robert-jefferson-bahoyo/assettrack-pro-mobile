@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
 import 'login_screen.dart';
+import 'manual_lookup_screen.dart';
 import 'qr_scanner_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -19,17 +20,86 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _isLoadingSummary = true;
+  Map<String, dynamic> _summary = {};
+  List<dynamic> _recentMovements = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSummary();
+  }
+
+  Future<void> _loadSummary() async {
+    setState(() {
+      _isLoadingSummary = true;
+    });
+
+    try {
+      final data = await ApiService.getDashboardSummary();
+
+      if (!mounted) return;
+
+      setState(() {
+        _summary = data['summary'] ?? {};
+        _recentMovements = data['recent_movements'] ?? [];
+        _isLoadingSummary = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingSummary = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  String _count(String key) {
+    final value = _summary[key];
+
+    if (value == null) {
+      return '0';
+    }
+
+    return value.toString();
+  }
+
   Future<void> _logout() async {
     await ApiService.logout();
 
     if (!mounted) return;
 
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => const LoginScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
           (route) => false,
     );
+  }
+
+  Future<void> _openScanner() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+    );
+
+    if (mounted) {
+      _loadSummary();
+    }
+  }
+
+  Future<void> _openSearch() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ManualLookupScreen()),
+    );
+
+    if (mounted) {
+      _loadSummary();
+    }
   }
 
   @override
@@ -43,83 +113,315 @@ class _HomeScreenState extends State<HomeScreen> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
+            onPressed: _loadSummary,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+          ),
+          IconButton(
             onPressed: _logout,
             icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
+
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.10),
+                blurRadius: 12,
+                offset: const Offset(0, -3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text(
+                      'Scan QR',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    onPressed: _openScanner,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.search),
+                    label: const Text(
+                      'Search',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    onPressed: _openSearch,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+
+      body: RefreshIndicator(
+        onRefresh: _loadSummary,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+          children: [
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    const CircleAvatar(
+                      radius: 28,
+                      backgroundColor: Color(0xFFE7F1FF),
+                      child: Icon(
+                        Icons.person_outline,
+                        color: primaryColor,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.userName.isNotEmpty
+                                ? widget.userName
+                                : 'User',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.userEmail,
+                            style: const TextStyle(color: Colors.black54),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            if (_isLoadingSummary)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              )
+            else
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1.7,
                 children: [
-                  const CircleAvatar(
-                    radius: 28,
-                    backgroundColor: Color(0xFFE7F1FF),
-                    child: Icon(
-                      Icons.person_outline,
-                      color: primaryColor,
-                      size: 32,
+                  _summaryCard(
+                    title: 'Total Assets',
+                    count: _count('total_assets'),
+                    icon: Icons.inventory_2_outlined,
+                  ),
+                  _summaryCard(
+                    title: 'Assigned',
+                    count: _count('assigned'),
+                    icon: Icons.person_outline,
+                  ),
+                  _summaryCard(
+                    title: 'Available',
+                    count: _count('available'),
+                    icon: Icons.check_circle_outline,
+                  ),
+                  _summaryCard(
+                    title: 'Maintenance',
+                    count: _count('maintenance'),
+                    icon: Icons.build_outlined,
+                  ),
+                  _summaryCard(
+                    title: 'Disposed',
+                    count: _count('disposed'),
+                    icon: Icons.delete_outline,
+                  ),
+                  _summaryCard(
+                    title: 'Lost',
+                    count: _count('lost'),
+                    icon: Icons.warning_amber_outlined,
+                  ),
+                ],
+              ),
+
+            const SizedBox(height: 20),
+
+            _recentActivitySection(),
+
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _recentActivitySection() {
+    if (_recentMovements.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(18),
+          child: Text(
+            'No recent activity.',
+            style: TextStyle(color: Colors.black54),
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      elevation: 1,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Recent Activity',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+            ),
+            const Divider(height: 22),
+
+            ..._recentMovements.map((item) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const CircleAvatar(
+                      radius: 18,
+                      child: Icon(Icons.history, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${_movementText(item['movement_type'])} - ${_text(item['asset_name'])}',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Asset No: ${_text(item['asset_no'])}',
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 13,
+                            ),
+                          ),
+                          Text(
+                            _text(item['movement_date']),
+                            style: const TextStyle(
+                              color: Colors.black45,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _movementText(dynamic value) {
+    final text = _text(value);
+
+    if (text == '-') {
+      return 'UPDATED';
+    }
+
+    return text.toUpperCase();
+  }
+
+  String _text(dynamic value) {
+    if (value == null) {
+      return '-';
+    }
+
+    final text = value.toString().trim();
+    return text.isEmpty ? '-' : text;
+  }
+
+  Widget _summaryCard({
+    required String title,
+    required String count,
+    required IconData icon,
+  }) {
+    const Color primaryColor = Color(0xFF0D6EFD);
+
+    return Card(
+      elevation: 1,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: primaryColor.withOpacity(0.10),
+              child: Icon(icon, color: primaryColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    count,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 22,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.userName.isNotEmpty
-                              ? widget.userName
-                              : 'User',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          widget.userEmail,
-                          style: const TextStyle(
-                            color: Colors.black54,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.black54,
+                      fontSize: 13,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-
-          const SizedBox(height: 16),
-
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.qr_code_scanner),
-              label: const Text(
-                'Scan Asset QR',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const QrScannerScreen(),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
