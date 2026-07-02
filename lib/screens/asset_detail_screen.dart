@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import 'serial_number_scanner_screen.dart';
 
-class AssetDetailScreen extends StatelessWidget {
+class AssetDetailScreen extends StatefulWidget {
   const AssetDetailScreen({
     super.key,
     required this.asset,
@@ -10,8 +11,21 @@ class AssetDetailScreen extends StatelessWidget {
 
   final Map<String, dynamic> asset;
 
+  @override
+  State<AssetDetailScreen> createState() => _AssetDetailScreenState();
+}
+
+class _AssetDetailScreenState extends State<AssetDetailScreen> {
+  late Map<String, dynamic> _asset;
+
+  @override
+  void initState() {
+    super.initState();
+    _asset = Map<String, dynamic>.from(widget.asset);
+  }
+
   String _value(String key) {
-    final value = asset[key];
+    final value = _asset[key];
 
     if (value == null) {
       return '-';
@@ -100,8 +114,203 @@ class AssetDetailScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _openSerialNumberDialog(BuildContext context) async {
+    final rawId = _asset['id'];
+
+    if (rawId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Asset ID is missing.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final int assetId = int.parse(rawId.toString());
+    final oldSerialNo = _value('serial_no');
+
+    final TextEditingController serialController = TextEditingController(
+      text: oldSerialNo == '-' ? '' : oldSerialNo,
+    );
+
+    bool isSaving = false;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: !isSaving,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> scanSerialNumber() async {
+              final scannedValue = await Navigator.of(dialogContext).push<String>(
+                MaterialPageRoute(
+                  builder: (_) => const SerialNumberScannerScreen(),
+                ),
+              );
+
+              if (scannedValue == null || scannedValue.trim().isEmpty) {
+                return;
+              }
+
+              setDialogState(() {
+                serialController.text = scannedValue.trim();
+              });
+            }
+
+            Future<void> saveSerialNumber() async {
+              final newSerialNo = serialController.text.trim();
+
+              if (newSerialNo.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Serial number is required.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              if (oldSerialNo != '-' && oldSerialNo == newSerialNo) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Serial number has no changes.'),
+                  ),
+                );
+                return;
+              }
+
+              setDialogState(() {
+                isSaving = true;
+              });
+
+              try {
+                await ApiService.updateSerialNumber(
+                  assetId: assetId,
+                  serialNo: newSerialNo,
+                );
+
+                if (!mounted) return;
+
+                setState(() {
+                  _asset['serial_no'] = newSerialNo;
+
+                  final currentMovements = _asset['movements'] is List
+                      ? List<dynamic>.from(_asset['movements'] as List<dynamic>)
+                      : <dynamic>[];
+
+                  currentMovements.insert(0, {
+                    'movement_type': 'serial_update',
+                    'movement_date': DateTime.now().toString(),
+                    'remarks':
+                    'Serial number updated from ${oldSerialNo == '-' ? '-' : oldSerialNo} to $newSerialNo.',
+                  });
+
+                  _asset['movements'] = currentMovements;
+                });
+
+                if (!dialogContext.mounted) return;
+
+                Navigator.of(dialogContext).pop();
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Serial number updated successfully.'),
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ApiService.friendlyError(e)),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+
+                if (dialogContext.mounted) {
+                  setDialogState(() {
+                    isSaving = false;
+                  });
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Update Serial Number'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Current Serial No: $oldSerialNo',
+                        style: const TextStyle(
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: isSaving ? null : scanSerialNumber,
+                        icon: const Icon(Icons.qr_code_scanner),
+                        label: const Text('Scan Serial Number'),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    TextField(
+                      controller: serialController,
+                      enabled: !isSaving,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        labelText: 'Serial Number',
+                        hintText: 'Scan or type serial number',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: (_) => saveSerialNumber(),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: isSaving ? null : saveSerialNumber,
+                  icon: isSaving
+                      ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(isSaving ? 'Saving...' : 'Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    serialController.dispose();
+  }
+
   Future<void> _returnAsset(BuildContext context) async {
-    final rawId = asset['id'];
+    final rawId = _asset['id'];
 
     if (rawId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -220,7 +429,7 @@ class AssetDetailScreen extends StatelessWidget {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text(ApiService.friendlyError(e)),
           backgroundColor: Colors.red,
         ),
       );
@@ -237,8 +446,8 @@ class AssetDetailScreen extends StatelessWidget {
     final String displayStatus = _displayStatus();
     final String condition = _value('condition_status');
 
-    final List<dynamic> movements = asset['movements'] is List
-        ? asset['movements'] as List<dynamic>
+    final List<dynamic> movements = _asset['movements'] is List
+        ? _asset['movements'] as List<dynamic>
         : [];
 
     final bool canReturn = status.toLowerCase() == 'assigned';
@@ -347,6 +556,15 @@ class AssetDetailScreen extends StatelessWidget {
               _row('Brand', _value('brand')),
               _row('Model', _value('model')),
               _row('Serial No', _value('serial_no')),
+              const SizedBox(height: 4),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _openSerialNumberDialog(context),
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: const Text('Update Serial Number'),
+                ),
+              ),
               if (_hasValue('description'))
                 _row('Description', _value('description')),
             ],

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../services/api_service.dart';
 import '../screens/home_screen.dart';
+import 'server_settings_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,6 +19,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  int _serverTapCount = 0;
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) {
@@ -63,6 +67,37 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _openServerSettings() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    final updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const ServerSettingsScreen()),
+    );
+
+    if (updated == true && mounted) {
+      final currentUrl = await ApiService.getBaseUrl();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Using server: $currentUrl')));
+    }
+  }
+
+  void _handleHiddenServerTap() {
+    if (_isLoading) {
+      return;
+    }
+
+    _serverTapCount++;
+
+    if (_serverTapCount >= 5) {
+      _serverTapCount = 0;
+      _openServerSettings();
+    }
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -96,28 +131,36 @@ class _LoginScreenState extends State<LoginScreen> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Container(
-                          width: 72,
-                          height: 72,
-                          decoration: BoxDecoration(
-                            color: primaryColor.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: const Icon(
-                            Icons.inventory_2_outlined,
-                            size: 40,
-                            color: primaryColor,
-                          ),
-                        ),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _handleHiddenServerTap,
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 72,
+                                height: 72,
+                                decoration: BoxDecoration(
+                                  color: primaryColor.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: const Icon(
+                                  Icons.inventory_2_outlined,
+                                  size: 40,
+                                  color: primaryColor,
+                                ),
+                              ),
 
-                        const SizedBox(height: 22),
+                              const SizedBox(height: 22),
 
-                        const Text(
-                          'AssetTrack Pro',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
+                              const Text(
+                                'AssetTrack Pro',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
 
@@ -126,10 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const Text(
                           'Sign in to continue',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.black54,
-                            fontSize: 15,
-                          ),
+                          style: TextStyle(color: Colors.black54, fontSize: 15),
                         ),
 
                         const SizedBox(height: 28),
@@ -210,20 +250,20 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             child: _isLoading
                                 ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
                                 : const Text(
-                              'Sign In',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                                    'Sign In',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                           ),
                         ),
 
@@ -232,10 +272,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const Text(
                           'Use your AssetTrack Pro account credentials.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.black45,
-                            fontSize: 13,
-                          ),
+                          style: TextStyle(color: Colors.black45, fontSize: 13),
                         ),
                       ],
                     ),
